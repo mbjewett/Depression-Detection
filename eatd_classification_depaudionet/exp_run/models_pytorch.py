@@ -357,6 +357,55 @@ class CustomMel(nn.Module):
 
         return mdd
 
+class BiGRU(nn.Module):
+    def __init__(self, input_size=40, hidden_size=128, num_layers=2, dropout_rate=0.05):
+        super(BiGRU, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(hidden_size*2, 1)
+        self.out_act = nn.Sigmoid()
+
+    def forward(self, x):
+        batch, width, freq = x.shape
+        x = x.transpose(1, 2)  # swap width and freq dimensions
+        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(x.device)  # 2 for bidirection
+        out, _ = self.gru(x, h0)
+
+        out = self.dropout(out)
+        out = self.fc(out[:, -1, :])  # use the last time step output
+        out = self.out_act(out)
+
+        return out.squeeze()
+    
+class BiLSTM(nn.Module):
+    def __init__(self, input_size=40, hidden_size=256, num_layers=10, dropout_rate=0.01):
+        super(BiLSTM, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(hidden_size*2, 1)
+        self.out_act = nn.Sigmoid()
+
+    def forward(self, x):
+        batch, width, freq = x.shape
+        x = x.transpose(1, 2)  # swap width and freq dimensions
+        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(x.device)  # 2 for bidirection
+        c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(x.device)  # 2 for bidirection
+        out, _ = self.lstm(x, (h0, c0))
+
+        out = self.dropout(out)
+        out = self.fc(out[:, -1, :])  # use the last time step output
+        out = self.out_act(out)
+
+        return out.squeeze()
+
 
 if __name__ == '__main__':
     model = CustomMel()

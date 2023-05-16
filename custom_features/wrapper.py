@@ -6,6 +6,8 @@ import numpy as np
 import csv
 import librosa
 import os
+#import torchaudio
+import opensmile
 
 '''
     This python wrapper file can be used for extraction of custom features and 
@@ -45,18 +47,56 @@ def extract_features(wav_path):
         - frame dimension is number of columns. 
         - for ex. Mel features will have 80xnumber of frames as matrix shape. 
     '''
-    audio_data, sample_rate = librosa.load(wav_path, sr=None)
-    feature = <call function to extract features>(audio_data) 
-    print('Processed {}, dimension {}'.format(wav_path, feature.shape))
-    
-    return feature # try to format features as np array with shape as mentioned above. 
+    audio, fs = librosa.load(wav_path, sr=None)  
 
+    # openSMILE features
+    smile = opensmile.Smile(feature_set=opensmile.FeatureSet.eGeMAPSv02,
+                            feature_level=opensmile.FeatureLevel.Functionals,
+                           )
+    features=smile.process_signal(audio,fs)
+    feat_out_openSMILE = features.to_numpy()
+
+    # librosa features
+    #audio,fs = torchaudio.load(wav_path)
+    #audio = audio.np().reshape(-1)
+    audio.reshape(-1)
+    mels = librosa.feature.melspectrogram(y=audio, sr=fs)
+    zcr = librosa.feature.zero_crossing_rate(audio)
+    lpc = librosa.lpc(y=audio, order=12)
+    mfccs = librosa.feature.mfcc(y=audio, sr=fs, n_mfcc=13)
+    feat_out_1 = np.append(np.array([np.nanmean(mels)]), np.array([np.nanmean(zcr)]))
+    feat_out_2 = np.append(np.array([lpc]),np.array(np.nanmean(mfccs, axis=1)))
+    feat_out_3 = np.append(np.array([np.nanmedian(mels)]), np.array([np.nanmedian(zcr)]))
+    feat_out_4 = np.array(np.nanmedian(mfccs, axis=1))
+    feat_out_librosa_mean = np.append(feat_out_1,feat_out_2)
+    feat_out_librosa_median = np.append(feat_out_3,feat_out_4)
+    feat_out_librosa = np.append(feat_out_librosa_mean,feat_out_librosa_median)
+
+    # append both openSMILE and librosa
+    feat_out = np.append(np.array(feat_out_openSMILE)[0,:],feat_out_librosa)
+    # to eliminate potential nan values
+    feat_out = np.nan_to_num(feat_out)
+    # to eliminate potential infinity values
+    feat_out = np.nan_to_num(feat_out, posinf=0)
+
+    # output feature index:
+    #       0-87:    openSMILE
+    #       88:      melspectrogram/mean
+    #       89:      zero_crossing_rate/mean
+    #       90-102:  lpc
+    #       103-115: mfccs/mean
+    #       116:     melspectrogram/median
+    #       117:     zero_crossing_rate/median
+    #       118-130: mfccs/median
+    print('Processed {}, dimension {}'.format(wav_path, feat_out.shape))
+    return feat_out
+    
 
 if __name__ == "__main__":
 
-    PATH_OF_FOLDER='/home/jinhan/workdir/214b_project/' # path where 214b_project is downloaded
+    PATH_OF_FOLDER='/home/michi/214b_project/' # path where 214b_project is downloaded
     feat_scp_path = PATH_OF_FOLDER+ 'EATD/labels/feat.scp'
-    custom_feat_folder=PATH_OF_FOLDER+'custom_features/name_of_custom_Feature' # Path where other acoustic feature should be stored. 
+    custom_feat_folder=PATH_OF_FOLDER+'custom_features/new_feats' # Path where other acoustic feature should be stored. 
 
     if not os.path.exists(custom_feat_folder):
         os.mkdir(custom_feat_folder)
